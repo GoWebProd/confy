@@ -137,9 +137,6 @@ pub fn load<T: Serialize + DeserializeOwned + Default>(name: &str) -> Result<T, 
             cfg_data.map_err(ConfyError::BadYAMLData)
         }
         Err(ref e) if e.kind() == NotFound => {
-            fs::create_dir_all(project.config_dir())
-                .map_err(ConfyError::DirectoryCreationFailed)?;
-            store(name, T::default())?;
             Ok(T::default())
         }
         Err(e) => Err(ConfyError::GeneralLoadError(e)),
