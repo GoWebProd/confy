@@ -60,7 +60,7 @@
 
 extern crate directories;
 extern crate serde;
-extern crate toml;
+extern crate serde_yaml;
 #[macro_use]
 extern crate failure;
 
@@ -73,21 +73,10 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind::NotFound, Write};
 use std::path::PathBuf;
 
-/*
-
-impl std::fmt::Display for ConfyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for ConfyError {}
-*/
-
 #[derive(Debug, Fail)]
 pub enum ConfyError {
-    #[fail(display = "Bad TOML data: {}", _0)]
-    BadTomlData(toml::de::Error),
+    #[fail(display = "Bad config data: {}", _0)]
+	BadYAMLData(serde_yaml::Error),
 
     #[fail(display = "Failed to create directory: {}", _0)]
     DirectoryCreationFailed(std::io::Error),
@@ -98,8 +87,8 @@ pub enum ConfyError {
     #[fail(display = "Failed to convert directory name to str.")]
     BadConfigDirectoryStr,
 
-    #[fail(display = "Failed to serialize configuration data into TOML.")]
-    SerializeTomlError(toml::ser::Error),
+    #[fail(display = "Failed to serialize configuration data into YAML.")]
+	SerializeYAMLError(serde_yaml::Error),
 
     #[fail(display = "Failed to write configuration file.")]
     WriteConfigurationFileError(std::io::Error),
@@ -137,15 +126,15 @@ pub fn load<T: Serialize + DeserializeOwned + Default>(name: &str) -> Result<T, 
 
     let config_dir_str = get_configuration_directory_str(&project)?;
 
-    let path: PathBuf = [config_dir_str, &format!("{}.toml", name)].iter().collect();
+    let path: PathBuf = [config_dir_str, &format!("{}.yaml", name)].iter().collect();
 
     match File::open(&path) {
         Ok(mut cfg) => {
             let cfg_string = cfg
                 .get_string()
                 .map_err(ConfyError::ReadConfigurationFileError)?;
-            let cfg_data = toml::from_str(&cfg_string);
-            cfg_data.map_err(ConfyError::BadTomlData)
+            let cfg_data = serde_yaml::from_str(&cfg_string);
+            cfg_data.map_err(ConfyError::BadYAMLData)
         }
         Err(ref e) if e.kind() == NotFound => {
             fs::create_dir_all(project.config_dir())
@@ -171,7 +160,7 @@ pub fn load<T: Serialize + DeserializeOwned + Default>(name: &str) -> Result<T, 
 /// ```rust,no_run
 /// # struct MyConf {}
 /// let my_cfg = MyConf {};
-/// confy::store(my_cfg)?;
+/// confy::store("config.yaml", my_cfg)?;
 /// ```
 ///
 /// Errors returned are I/O errors related to not being
@@ -184,7 +173,7 @@ pub fn store<T: Serialize>(name: &str, cfg: T) -> Result<(), ConfyError> {
 
     let config_dir_str = get_configuration_directory_str(&project)?;
 
-    let path: PathBuf = [config_dir_str, &format!("{}.toml", name)].iter().collect();
+    let path: PathBuf = [config_dir_str, &format!("{}.yaml", name)].iter().collect();
 
     let mut f = OpenOptions::new()
         .write(true)
@@ -192,7 +181,7 @@ pub fn store<T: Serialize>(name: &str, cfg: T) -> Result<(), ConfyError> {
         .truncate(true)
         .open(path)
         .map_err(ConfyError::OpenConfigurationFileError)?;
-    let s = toml::to_string_pretty(&cfg).map_err(ConfyError::SerializeTomlError)?;
+    let s = serde_yaml::to_string(&cfg).map_err(ConfyError::SerializeYAMLError)?;
     f.write_all(s.as_bytes())
         .map_err(ConfyError::WriteConfigurationFileError)?;
     Ok(())
