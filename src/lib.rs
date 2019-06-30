@@ -58,7 +58,6 @@
 //! [`store`]: fn.store.html
 //!
 
-extern crate directories;
 extern crate serde;
 extern crate serde_yaml;
 #[macro_use]
@@ -67,11 +66,10 @@ extern crate failure;
 mod utils;
 use utils::*;
 
-use directories::ProjectDirs;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fs::{self, File, OpenOptions};
+use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind::NotFound, Write};
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Debug, Fail)]
 pub enum ConfyError {
@@ -121,13 +119,7 @@ pub enum ConfyError {
 /// # }
 /// let cfg: MyConfig = confy::load("my-app")?;
 /// ```
-pub fn load<T: Serialize + DeserializeOwned + Default>(name: &str) -> Result<T, ConfyError> {
-    let project = ProjectDirs::from("rs", name, name);
-
-    let config_dir_str = get_configuration_directory_str(&project)?;
-
-    let path: PathBuf = [config_dir_str, &format!("{}.yaml", name)].iter().collect();
-
+pub fn load<T: DeserializeOwned + Default, U: AsRef<Path>>(path: U) -> Result<T, ConfyError> {
     match File::open(&path) {
         Ok(mut cfg) => {
             let cfg_string = cfg
@@ -164,14 +156,7 @@ pub fn load<T: Serialize + DeserializeOwned + Default>(name: &str) -> Result<T, 
 /// able to write the configuration file or if `confy`
 /// encounters an operating system or environment it does
 /// not support.
-pub fn store<T: Serialize>(name: &str, cfg: T) -> Result<(), ConfyError> {
-    let project = ProjectDirs::from("rs", name, name);
-    fs::create_dir_all(project.config_dir()).map_err(ConfyError::DirectoryCreationFailed)?;
-
-    let config_dir_str = get_configuration_directory_str(&project)?;
-
-    let path: PathBuf = [config_dir_str, &format!("{}.yaml", name)].iter().collect();
-
+pub fn store<T: Serialize, U: AsRef<Path>>(path: U, cfg: T) -> Result<(), ConfyError> {
     let mut f = OpenOptions::new()
         .write(true)
         .create(true)
@@ -182,13 +167,4 @@ pub fn store<T: Serialize>(name: &str, cfg: T) -> Result<(), ConfyError> {
     f.write_all(s.as_bytes())
         .map_err(ConfyError::WriteConfigurationFileError)?;
     Ok(())
-}
-
-fn get_configuration_directory_str(project: &ProjectDirs) -> Result<&str, ConfyError> {
-    let config_dir_option = project.config_dir().to_str();
-
-    match config_dir_option {
-        Some(x) => Ok(x),
-        None => Err(ConfyError::BadConfigDirectoryStr),
-    }
 }
